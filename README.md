@@ -31,8 +31,7 @@ git clone https://github.com/sua-org/backend.git
 git clone https://github.com/sua-org/infra.git
 ```
 
-### 2. Estrutura esperada
-Certifique-se de que os repositórios `frontend` e `backend` estejam no mesmo nível do diretório `infra`:
+### 2. Estrutura 
 
 ```bash
 parent-folder/

@@ -1,11 +1,15 @@
 up:
-	@echo "🚀 Iniciando ambiente com validações..."
-	@./scripts/start.sh
+	@echo "🚀 Iniciando ambiente..."
+	./scripts/start.sh
+	docker compose down
+	docker compose up --build
 
 down:
-	@echo "🧯 Finalizando containers..."
-	@./scripts/stop.sh
+	@echo "🛑 Derrubando containers..."
+	docker compose down
 
 logs:
-	@echo "📜 Exibindo logs do frontend:"
-	@tail -f logs/frontend.log
+	docker compose logs -f
+
+rebuild:
+	docker compose build --no-cache
