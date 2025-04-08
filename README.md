@@ -1,97 +1,139 @@
-# infra
+# 🚀 infra-hero
 
-Este repositório tem como objetivo centralizar o gerenciamento e a orquestração de múltiplos serviços distribuídos em diferentes repositórios (multi-repo). Ele é ideal para ambientes de desenvolvimento local e testes integrados, oferecendo uma experiência padronizada e simplificada de execução dos projetos frontend, backend e banco de dados.
-
-## 📦 Estrutura do Projeto
-
-```bash
-infra/
-├── logs/                  # Diretório de logs persistentes
-│   └── frontend.log
-├── scripts/               # Scripts utilitários para execução automatizada
-│   ├── start.sh           # Inicializa os serviços com validações
-│   ├── stop.sh            # Finaliza os containers
-│   └── utils.sh           # Funções compartilhadas
-├── Makefile               # Atalhos para comandos frequentes
-├── docker-compose.yml     # Orquestra todos os serviços
-└── README.md
-```
-
-## 🚀 Como Usar
-
-### Pré-requisitos
-- Docker + Docker Compose
-- Git
-
-### 1. Clone os repositórios necessários
-
-```bash
-git clone https://github.com/sua-org/frontend.git
-git clone https://github.com/sua-org/backend.git
-git clone https://github.com/sua-org/infra.git
-```
-
-### 2. Estrutura 
-
-```bash
-parent-folder/
-├── backend/
-├── frontend/
-└── infra/
-```
-
-### 3. Inicie o ambiente local
-Execute o script de start:
-
-```bash
-cd infra
-./scripts/start.sh
-```
-
-Isso irá:
-- Verificar se as portas 3000, 3306 e 8081 estão livres
-- Rodar `docker compose down` para reiniciar o ambiente
-- Iniciar o banco, frontend e backend em containers isolados
-- Persistir os logs do frontend em `logs/frontend.log`
-
-### 4. Parar os containers
-```bash
-./scripts/stop.sh
-```
-
-### 5. Atalhos com Makefile
-
-```bash
-make up      # Equivalente a ./scripts/start.sh
-make down    # Equivalente a ./scripts/stop.sh
-make logs    # Visualiza logs do frontend
-```
-
-## 🧪 Fluxo de Desenvolvimento
-
-Sempre que fizer alterações em algum projeto (ex: frontend), utilize o `infra` para validar a integração:
-
-1. `cd infra`
-2. `./scripts/start.sh`
-3. Verifique se os logs acusam erro
-4. Se tudo estiver ok, volte ao projeto alterado e rode `docker compose up` localmente para desenvolvimento incremental
-
-## 📌 Observações
-- Esse repositório **não é utilizado em produção**, mas pode ser adaptado futuramente com variáveis e pipelines para isso.
-- Todos os serviços dependem da rede compartilhada `infra-network`, definida no `docker-compose.yml`.
-
-## 🧠 Para que serve o repositório infra?
-
-Este repositório resolve a dor de cabeça de rodar manualmente cada serviço em seu próprio terminal ou pasta. Com ele você:
-- Reduz a complexidade de boot de múltiplos serviços
-- Garante que os serviços rodam em harmonia (com `depends_on`, `healthcheck` e logs)
-- Centraliza os testes de integração (ideal para preparar pipelines de CI futuramente)
+Infraestrutura Dockerizada para orquestração de múltiplos serviços — **frontend, backend, banco de dados e proxy reverso** — com suporte a ambientes de desenvolvimento e produção simplificados via `docker-compose`.
 
 ---
 
-## ✅ Contribuições
-Sinta-se à vontade para abrir issues e pull requests. Vamos juntos evoluir esta infraestrutura.
+## 📌 Objetivo
 
-## 🛠️ Autor
-Felipe Panosso
+Este projeto tem como objetivo centralizar e simplificar o gerenciamento da infraestrutura de aplicações com múltiplos repositórios (multi-repo), permitindo que backend, frontend e serviços auxiliares sejam orquestrados de forma unificada.
 
+---
+
+## ⚙️ Tecnologias Utilizadas
+
+- Docker
+- Docker Compose
+- Nginx (Proxy reverso) (será alterado para ngrok futuramente)
+- Makefile (para automação)
+- Scripts Shell (`scripts/`)
+
+---
+
+## 🧭 Fluxo de Rede dos Serviços
+
+```
+[ Navegador ] ⇄ http://localhost → [ NGINX (porta 80) ]
+                           ├── /api → Backend (porta 8080)
+                           └── /     → Frontend (porta 3000)
+```
+
+---
+
+## 🏗 Estrutura
+
+```
+infra-hero/
+├── docker-compose.yml
+├── Makefile
+├── nginx/
+│   └── nginx.conf
+├── scripts/
+│   └── start.sh
+├── logs/
+│   └── frontend.log (gerado automaticamente)
+```
+
+---
+
+## 📂 Requisitos
+
+- Backend e frontend possuem seus próprios `Dockerfile` (com nomes `Dockerfile.backend` e `Dockerfile.frontend`).
+- Estrutura:
+
+```
+infra-hero/
+├── frontend/
+│   ├── Dockerfile.frontend
+│   └── start-frontend.sh
+├── backend/
+│   ├── Dockerfile.backend
+│   └── start-backend.sh
+```
+
+> 🔁 Os scripts `start-*.sh` são usados pelo Docker para iniciar os serviços e podem conter comandos customizados.
+
+---
+
+## 🚀 Como rodar localmente
+
+1. Clone este repositório `infra-hero`
+2. Adicione os repositórios do **backend** e **frontend** como subpastas.
+3. Execute:
+
+```bash
+make up
+```
+
+Isso irá:
+- Verificar se as portas 3000 e 8080 estão disponíveis
+- Derrubar containers antigos (`docker compose down`)
+- Subir os containers com rebuild (`docker compose up --build`)
+- Criar logs persistentes no diretório `logs/`
+
+---
+
+## 🛠 Comandos
+
+| Comando         | Ação                                                         |
+|----------------|--------------------------------------------------------------|
+| `make up`      | Sobe todos os serviços com rebuild                           |
+| `make down`    | Derruba todos os containers                                  |
+| `make rebuild` | Rebuilda sem subir                                           |
+| `make logs`    | Mostra logs do frontend                                      |
+
+---
+
+## 🧱 Organização do Projeto
+
+- `docker-compose.yml`: define os serviços `nginx`, `frontend`, `backend`
+- `nginx.conf`: direciona o tráfego para `/api` (backend) e `/` (frontend)
+- `Makefile`: interface automatizada para comandos comuns
+- `scripts/start.sh`: script principal de inicialização com validações
+
+---
+
+## 🧪 Testando após alterações
+
+Ao alterar o código do backend ou frontend:
+
+1. Salva as alterações nos respectivos projetos
+2. Executa `make up` no repositório `infra-hero`
+3. O Docker irá rebuildar e subir os containers atualizados
+
+> ✅ Não é necessário rodar `docker compose up` nos projetos individuais.
+
+---
+
+## 🔐 SSL e Produção (futuro)
+
+HTTPS em produção:
+
+1. Gerar ou obtenha certificados oficiais
+2. Criar a pasta `ssl/` com os arquivos:
+   - `cert.pem`
+   - `privkey.pem`
+   - `fullchain.pem`
+3. Atualizar o `nginx.conf` com suporte a SSL
+
+---
+
+## 🧠 Autoria
+
+Desenvolvido por Felipe Panosso.  
+
+---
+
+## 📄 Licença
+
+MIT License.
