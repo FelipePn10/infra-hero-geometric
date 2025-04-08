@@ -1,0 +1,40 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    container_name: hero-backend
+    restart: unless-stopped
+    expose:
+      - "8080"
+    networks:
+      - app_net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    container_name: hero-frontend
+    restart: unless-stopped
+    expose:
+      - "3000"
+    networks:
+      - app_net
+
+  nginx:
+    image: nginx:stable-alpine
+    container_name: hero-nginx
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./logs:/var/log/nginx
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - app_net
+
+networks:
+  app_net:
+    driver: bridge
