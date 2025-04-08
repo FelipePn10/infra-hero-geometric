@@ -85,7 +85,7 @@ Isso irá:
 
 ## 🛠 Comandos
 
-| Comando         | Ação                                                         |
+| Comando         | Ação                                                        |
 |----------------|--------------------------------------------------------------|
 | `make up`      | Sobe todos os serviços com rebuild                           |
 | `make down`    | Derruba todos os containers                                  |
