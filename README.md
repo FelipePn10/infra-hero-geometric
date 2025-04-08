@@ -119,7 +119,7 @@ Ao alterar o código do backend ou frontend:
 
 HTTPS em produção:
 
-1. Gerar ou obtenha certificados oficiais
+1. Gerar/obter certificados oficiais
 2. Criar a pasta `ssl/` com os arquivos:
    - `cert.pem`
    - `privkey.pem`
