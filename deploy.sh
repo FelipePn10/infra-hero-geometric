@@ -7,9 +7,6 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-# ========================================
-# CONFIGURAÇÕES
-# ========================================
 FRONTEND_REPO="${FRONTEND_REPO:-https://github.com/seu-usuario/frontend.git}"
 BACKEND_REPO="${BACKEND_REPO:-https://github.com/seu-usuario/backend.git}"
 FRONTEND_DIR="frontend"
@@ -21,9 +18,6 @@ echo -e "${BLUE}║           HERO INFRA - Deploy Produção                    
 echo -e "${BLUE}╚════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
-# ========================================
-# 1. Verificações Iniciais
-# ========================================
 echo -e "${YELLOW}[1/8] Verificando requisitos...${NC}"
 
 if ! command -v docker &> /dev/null; then
@@ -43,9 +37,6 @@ fi
 
 echo -e "${GREEN}✅ Requisitos OK${NC}"
 
-# ========================================
-# 2. Verificar Portas
-# ========================================
 echo -e "${YELLOW}[2/8] Verificando portas...${NC}"
 
 if lsof -i :80 > /dev/null 2>&1; then
@@ -61,9 +52,6 @@ fi
 
 echo -e "${GREEN}✅ Portas disponíveis${NC}"
 
-# ========================================
-# 3. Função para Clonar/Atualizar Repos
-# ========================================
 update_repository() {
     local repo_url=$1
     local dir_name=$2
@@ -96,9 +84,6 @@ update_repository() {
     fi
 }
 
-# ========================================
-# 4. Atualizar Repositórios
-# ========================================
 echo -e "${YELLOW}[3/8] Atualizando repositórios...${NC}"
 
 if [ "$FRONTEND_REPO" != "https://github.com/seu-usuario/frontend.git" ]; then
@@ -121,9 +106,6 @@ else
     fi
 fi
 
-# ========================================
-# 5. Criar Backups
-# ========================================
 echo -e "${YELLOW}[4/8] Criando backup do banco de dados...${NC}"
 
 if docker ps | grep -q hero-mysql-prod; then
@@ -141,9 +123,6 @@ else
     echo -e "${YELLOW}⚠️  MySQL não está rodando, pulando backup${NC}"
 fi
 
-# ========================================
-# 6. Verificar Arquivo .env
-# ========================================
 echo -e "${YELLOW}[5/8] Verificando configurações...${NC}"
 
 if [ ! -f ".env" ]; then
@@ -161,16 +140,10 @@ EOF
     echo -e "${RED}⚠️  IMPORTANTE: Salve estas credenciais em local seguro!${NC}"
 fi
 
-# ========================================
-# 7. Parar Containers Antigos
-# ========================================
 echo -e "${YELLOW}[6/8] Parando ambiente anterior...${NC}"
 docker compose -f docker-compose.prod.yml down 2>/dev/null || true
 echo -e "${GREEN}✅ Ambiente anterior parado${NC}"
 
-# ========================================
-# 8. Subir Novos Containers
-# ========================================
 echo -e "${YELLOW}[7/8] Iniciando novos containers...${NC}"
 
 # Pull das imagens base primeiro
@@ -181,9 +154,6 @@ docker compose -f docker-compose.prod.yml up --build -d
 
 echo -e "${GREEN}✅ Containers iniciados${NC}"
 
-# ========================================
-# 9. Verificar Health
-# ========================================
 echo -e "${YELLOW}[8/8] Verificando saúde dos serviços...${NC}"
 
 sleep 5
@@ -214,9 +184,6 @@ check_health "hero-backend-prod"
 check_health "hero-frontend-prod"
 check_health "hero-nginx-prod"
 
-# ========================================
-# Finalização
-# ========================================
 echo ""
 echo -e "${GREEN}╔════════════════════════════════════════════════════════════╗${NC}"
 echo -e "${GREEN}║           Deploy Concluído com Sucesso!                    ║${NC}"

@@ -1,9 +1,6 @@
 version: "3.8"
 
 services:
-  # ========================================
-  # NGINX - Proxy Reverso
-  # ========================================
   nginx:
     image: nginx:alpine
     container_name: hero-nginx
@@ -22,7 +19,7 @@ services:
     restart: unless-stopped
 
   # ========================================
-  # FRONTEND - React/Next.js
+  # FRONTEND EXAMPLE - React/Next.js
   # ========================================
   frontend:
     container_name: hero-frontend
@@ -47,7 +44,7 @@ services:
     tty: true
 
   # ========================================
-  # BACKEND - Go/Node.js
+  # BACKEND EXAMPLE - Go/Node.js
   # ========================================
   backend:
     container_name: hero-backend
@@ -74,9 +71,6 @@ services:
       - hero-network
     restart: unless-stopped
 
-  # ========================================
-  # MYSQL - Banco de Dados
-  # ========================================
   mysql:
     image: mysql:8.0
     container_name: hero-mysql
@@ -100,9 +94,6 @@ services:
       timeout: 5s
       retries: 5
 
-  # ========================================
-  # REDIS - Cache (Opcional)
-  # ========================================
   redis:
     image: redis:alpine
     container_name: hero-redis
@@ -115,18 +106,12 @@ services:
     restart: unless-stopped
     command: redis-server --appendonly yes
 
-# ========================================
-# VOLUMES
-# ========================================
 volumes:
   mysql_data:
     driver: local
   redis_data:
     driver: local
 
-# ========================================
-# NETWORKS
-# ========================================
 networks:
   hero-network:
     driver: bridge
