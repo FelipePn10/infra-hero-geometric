@@ -2,10 +2,6 @@
 
 <div align="center">
 
-![Hero Infra](https://img.shields.io/badge/Hero-Infrastructure-blue?style=for-the-badge)
-![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white)
-![Status](https://img.shields.io/badge/Status-Production%20Ready-success?style=for-the-badge)
-
 **Infraestrutura completa de orquestração Docker com monitoramento em tempo real, ferramentas visuais e suporte multi-ambiente**
 
 [🎯 Features](#-features) • [⚡ Quick Start](#-quick-start) • [📚 Documentation](#-documentation) • [🛠️ Commands](#️-available-commands)
