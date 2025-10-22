@@ -1,49 +1,133 @@
+version: "3.8"
+
 services:
-  
-  backend:
-    container_name: hero-backend
-    build:
-      context: /mnt/c/Users/felip/GolandProjects/webskt/chatapp
-      dockerfile: Dockerfile.backend
-    working_dir: /app
-    volumes:
-      - /mnt/c/Users/felip/GolandProjects/webskt/chatapp:/app
-    command: sh -c "npm install && npm run dev"
+  # ========================================
+  # NGINX - Proxy Reverso
+  # ========================================
+  nginx:
+    image: nginx:alpine
+    container_name: hero-nginx
     ports:
-      - "3333:3333"
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./logs/nginx:/var/log/nginx
+    depends_on:
+      - frontend
+      - backend
     networks:
       - hero-network
+    restart: unless-stopped
 
+  # ========================================
+  # FRONTEND - React/Next.js
+  # ========================================
   frontend:
     container_name: hero-frontend
     build:
-      context: /mnt/c/Users/felip/projectship/hero-geometric
-      dockerfile: Dockerfile.frontend
+      context: ./frontend
+      dockerfile: Dockerfile.dev
     working_dir: /app
     volumes:
-      - /mnt/c/Users/felip/projectship/hero-geometric:/app
-    command: sh -c "npm install && npm run dev"
+      - ./frontend:/app
+      - /app/node_modules
+      - ./logs/frontend:/app/logs
+    environment:
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
     ports:
       - "3000:3000"
     networks:
       - hero-network
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
 
+  # ========================================
+  # BACKEND - Go/Node.js
+  # ========================================
+  backend:
+    container_name: hero-backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    working_dir: /app
+    volumes:
+      - ./backend:/app
+      - ./logs/backend:/app/logs
+    environment:
+      - NODE_ENV=development
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_USER=root
+      - DB_PASSWORD=root
+      - DB_NAME=hero
+    ports:
+      - "8080:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - hero-network
+    restart: unless-stopped
+
+  # ========================================
+  # MYSQL - Banco de Dados
+  # ========================================
   mysql:
     image: mysql:8.0
     container_name: hero-mysql
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: hero
+      MYSQL_USER: hero_user
+      MYSQL_PASSWORD: hero_pass
     ports:
       - "3306:3306"
     volumes:
-      - db_data:/var/lib/mysql
+      - mysql_data:/var/lib/mysql
+      - ./mysql/init:/docker-entrypoint-initdb.d
+      - ./logs/mysql:/var/log/mysql
     networks:
       - hero-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
+  # ========================================
+  # REDIS - Cache (Opcional)
+  # ========================================
+  redis:
+    image: redis:alpine
+    container_name: hero-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - hero-network
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+
+# ========================================
+# VOLUMES
+# ========================================
 volumes:
-  db_data:
+  mysql_data:
+    driver: local
+  redis_data:
+    driver: local
 
+# ========================================
+# NETWORKS
+# ========================================
 networks:
   hero-network:
     driver: bridge
+    name: hero-network
