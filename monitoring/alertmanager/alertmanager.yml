@@ -1,0 +1,189 @@
+global:
+  resolve_timeout: 5m
+  slack_api_url: "${SLACK_WEBHOOK_URL}"
+  smtp_smarthost: "${SMTP_HOST}:${SMTP_PORT}"
+  smtp_from: "${SMTP_FROM}"
+  smtp_auth_username: "${SMTP_USER}"
+  smtp_auth_password: "${SMTP_PASSWORD}"
+  smtp_require_tls: true
+
+# Templates for notifications
+templates:
+  - "/etc/alertmanager/templates/*.tmpl"
+
+# Route tree
+route:
+  group_by: ["alertname", "cluster", "service"]
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 12h
+  receiver: "default"
+
+  routes:
+    # Critical alerts - immediate notification
+    - match:
+        severity: critical
+      receiver: "critical-alerts"
+      continue: true
+      group_wait: 0s
+      repeat_interval: 1h
+
+    # Warning alerts - grouped notifications
+    - match:
+        severity: warning
+      receiver: "warning-alerts"
+      group_wait: 30s
+      repeat_interval: 4h
+
+    # Database alerts
+    - match_re:
+        alertname: ^(MySQLDown|RedisDown|DatabaseConnection).*
+      receiver: "database-team"
+      continue: true
+
+    # Infrastructure alerts
+    - match_re:
+        alertname: ^(InstanceDown|HighCPU|HighMemory|DiskSpace).*
+      receiver: "infrastructure-team"
+      continue: true
+
+    # Application alerts
+    - match_re:
+        alertname: ^(BackendDown|FrontendDown|HighErrorRate).*
+      receiver: "dev-team"
+      continue: true
+
+# Inhibition rules
+inhibit_rules:
+  # Suppress warning if critical alert is firing
+  - source_match:
+      severity: "critical"
+    target_match:
+      severity: "warning"
+    equal: ["alertname", "instance"]
+
+  # Suppress container alerts if host is down
+  - source_match:
+      alertname: "InstanceDown"
+    target_match_re:
+      alertname: "^Container.*"
+    equal: ["instance"]
+
+# Receivers configuration
+receivers:
+  - name: "default"
+    slack_configs:
+      - channel: "#alerts"
+        title: "{{ .GroupLabels.alertname }}"
+        text: "{{ range .Alerts }}{{ .Annotations.description }}{{ end }}"
+        send_resolved: true
+
+  - name: "critical-alerts"
+    slack_configs:
+      - channel: "#critical-alerts"
+        title: "🚨 CRITICAL: {{ .GroupLabels.alertname }}"
+        text: |-
+          *Severity:* `{{ .CommonLabels.severity }}`
+          *Summary:* {{ .CommonAnnotations.summary }}
+
+          *Details:*
+          {{ range .Alerts }}
+          • {{ .Annotations.description }}
+          {{ end }}
+        color: "danger"
+        send_resolved: true
+
+    email_configs:
+      - to: "oncall@hero.com, team-lead@hero.com"
+        subject: "🚨 [CRITICAL] {{ .GroupLabels.alertname }}"
+        html: |-
+          <h2>Critical Alert Fired</h2>
+          <p><strong>Summary:</strong> {{ .CommonAnnotations.summary }}</p>
+          <p><strong>Severity:</strong> {{ .CommonLabels.severity }}</p>
+          <h3>Details:</h3>
+          <ul>
+          {{ range .Alerts }}
+            <li>{{ .Annotations.description }}</li>
+          {{ end }}
+          </ul>
+        send_resolved: true
+
+    webhook_configs:
+      - url: "http://localhost:5001/webhook/critical"
+        send_resolved: true
+
+  - name: "warning-alerts"
+    slack_configs:
+      - channel: "#warnings"
+        title: "⚠️ WARNING: {{ .GroupLabels.alertname }}"
+        text: |-
+          *Summary:* {{ .CommonAnnotations.summary }}
+          {{ range .Alerts }}
+          • {{ .Annotations.description }}
+          {{ end }}
+        color: "warning"
+        send_resolved: true
+
+  - name: "database-team"
+    slack_configs:
+      - channel: "#database-alerts"
+        title: "🗄️ Database Alert: {{ .GroupLabels.alertname }}"
+        text: |-
+          *Database:* {{ .CommonLabels.database }}
+          *Summary:* {{ .CommonAnnotations.summary }}
+
+          {{ range .Alerts }}
+          • {{ .Annotations.description }}
+          {{ end }}
+        send_resolved: true
+
+    email_configs:
+      - to: "dba@hero.com"
+        subject: "[DB Alert] {{ .GroupLabels.alertname }}"
+        send_resolved: true
+
+  - name: "infrastructure-team"
+    slack_configs:
+      - channel: "#infrastructure"
+        title: "🖥️ Infrastructure: {{ .GroupLabels.alertname }}"
+        text: |-
+          *Instance:* {{ .CommonLabels.instance }}
+          *Summary:* {{ .CommonAnnotations.summary }}
+
+          {{ range .Alerts }}
+          • {{ .Annotations.description }}
+          {{ end }}
+        send_resolved: true
+
+    email_configs:
+      - to: "infra@hero.com"
+        subject: "[Infra] {{ .GroupLabels.alertname }}"
+        send_resolved: true
+
+  - name: "dev-team"
+    slack_configs:
+      - channel: "#dev-alerts"
+        title: "💻 Application Alert: {{ .GroupLabels.alertname }}"
+        text: |-
+          *Service:* {{ .CommonLabels.service }}
+          *Summary:* {{ .CommonAnnotations.summary }}
+
+          {{ range .Alerts }}
+          • {{ .Annotations.description }}
+          {{ end }}
+        send_resolved: true
+
+    email_configs:
+      - to: "dev-team@hero.com"
+        subject: "[App] {{ .GroupLabels.alertname }}"
+        send_resolved: true
+
+  - name: "pagerduty"
+    pagerduty_configs:
+      - service_key: "${PAGERDUTY_SERVICE_KEY}"
+        description: "{{ .CommonAnnotations.summary }}"
+        severity: "{{ .CommonLabels.severity }}"
+        details:
+          firing: "{{ .Alerts.Firing | len }}"
+          resolved: "{{ .Alerts.Resolved | len }}"
+        send_resolved: true

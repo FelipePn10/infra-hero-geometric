@@ -1,0 +1,33 @@
+{
+  "name": "infra-hero-geometric",
+  "version": "1.0.0",
+  "description": "Infraestrutura Dockerizada para orquestração de múltiplos serviços — **frontend, backend, banco de dados e proxy reverso** — com suporte a ambientes de desenvolvimento e produção simplificados via `docker-compose`.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/FelipePn10/infra-hero-geometric.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/FelipePn10/infra-hero-geometric/issues"
+  },
+  "homepage": "https://github.com/FelipePn10/infra-hero-geometric#readme",
+  "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "react-hot-toast": "^2.6.0",
+    "xterm": "^5.3.0",
+    "xterm-addon-fit": "^0.8.0",
+    "xterm-addon-search": "^0.13.0",
+    "xterm-addon-web-links": "^0.9.0",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.2"
+  }
+}

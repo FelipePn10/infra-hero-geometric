@@ -1,0 +1,119 @@
+services:
+  dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+    container_name: hero-dashboard
+    ports:
+      - "5000:5000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./:/app/infra:ro
+      - ./backups:/app/backups
+      - ./logs:/app/logs:ro
+    environment:
+      - NODE_ENV=production
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    networks:
+      - hero-network
+    restart: unless-stopped
+    labels:
+      - "com.hero.service=dashboard"
+      - "com.hero.description=Web UI Control Panel"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost:5000/api/health",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  auto-sync:
+    build:
+      context: ./scripts
+      dockerfile: Dockerfile.sync
+    container_name: hero-auto-sync
+    volumes:
+      - ./frontend:/app/frontend
+      - ./backend:/app/backend
+      - ./nginx:/app/nginx
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    networks:
+      - hero-network
+    restart: unless-stopped
+    labels:
+      - "com.hero.service=auto-sync"
+      - "com.hero.description=Automatic Code Synchronization"
+
+  migration-runner:
+    build:
+      context: ./scripts
+      dockerfile: Dockerfile.migrations
+    container_name: hero-migrations
+    volumes:
+      - ./backend/migrations:/migrations
+      - ./migrations_log.json:/app/migrations_log.json
+    environment:
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_USER=root
+      - DB_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - DB_NAME=hero
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - hero-network
+    restart: unless-stopped
+    labels:
+      - "com.hero.service=migrations"
+      - "com.hero.description=Automatic Database Migrations"
+
+  code-generator:
+    build:
+      context: ./tools
+      dockerfile: Dockerfile.codegen
+    container_name: hero-codegen
+    ports:
+      - "6000:6000"
+    volumes:
+      - ./frontend:/app/frontend
+      - ./backend:/app/backend
+      - ./tools/templates:/app/templates
+    networks:
+      - hero-network
+    restart: unless-stopped
+    labels:
+      - "com.hero.service=codegen"
+      - "com.hero.description=Code Generator & Scaffolding"
+
+  visual-builder:
+    build:
+      context: ./tools/visual-builder
+      dockerfile: Dockerfile
+    container_name: hero-visual-builder
+    ports:
+      - "7000:7000"
+    volumes:
+      - ./:/app/project
+    environment:
+      - NODE_ENV=production
+    networks:
+      - hero-network
+    restart: unless-stopped
+    labels:
+      - "com.hero.service=visual-builder"
+      - "com.hero.description=Visual Environment Builder"
+
+networks:
+  hero-network:
+    external: true

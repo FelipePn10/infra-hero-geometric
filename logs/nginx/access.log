@@ -1,0 +1,2 @@
+172.19.0.1 - - [22/Oct/2025:01:34:47 +0000] "GET /033[0m HTTP/1.1" 500 177 "-" "Mozilla/5.0 (X11; Linux x86_64; rv:144.0) Gecko/20100101 Firefox/144.0"
+172.19.0.1 - - [22/Oct/2025:01:34:47 +0000] "GET /favicon.ico HTTP/1.1" 500 177 "http://localhost/033[0m" "Mozilla/5.0 (X11; Linux x86_64; rv:144.0) Gecko/20100101 Firefox/144.0"

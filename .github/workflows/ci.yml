@@ -1,0 +1,282 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop, staging]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+env:
+  DOCKER_BUILDKIT: 1
+  COMPOSE_DOCKER_CLI_BUILD: 1
+
+jobs:
+  lint:
+    name: Lint & Validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate Docker Compose files
+        run: |
+          docker compose -f docker-compose.yml config > /dev/null
+          docker compose -f docker-compose.prod.yml config > /dev/null
+          echo "✅ Docker Compose files are valid"
+
+      - name: Lint shell scripts
+        run: |
+          sudo apt-get update && sudo apt-get install -y shellcheck
+          find scripts/ -name "*.sh" -exec shellcheck {} \;
+          echo "✅ Shell scripts linted"
+
+      - name: Check Nginx configs
+        run: |
+          docker run --rm -v $(pwd)/nginx:/etc/nginx:ro nginx:alpine nginx -t
+          echo "✅ Nginx configs are valid"
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: "config"
+          scan-ref: "."
+          format: "sarif"
+          output: "trivy-results.sarif"
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: "trivy-results.sarif"
+
+  build:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    needs: [lint, security]
+    strategy:
+      matrix:
+        environment: [dev, prod]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Create .env file
+        run: |
+          cat > .env << EOF
+          NODE_ENV=${{ matrix.environment }}
+          MYSQL_ROOT_PASSWORD=test_root_pass
+          DB_PASSWORD=test_db_pass
+          DB_NAME=hero_test
+          DB_USER=hero_user
+          REDIS_PASSWORD=test_redis_pass
+          JWT_SECRET=test_jwt_secret_for_ci
+          EOF
+
+      - name: Build Docker images
+        run: |
+          if [ "${{ matrix.environment }}" = "dev" ]; then
+            docker compose -f docker-compose.yml build
+          else
+            docker compose -f docker-compose.prod.yml build
+          fi
+
+      - name: Start services
+        run: |
+          if [ "${{ matrix.environment }}" = "dev" ]; then
+            docker compose -f docker-compose.yml up -d
+          else
+            docker compose -f docker-compose.prod.yml up -d
+          fi
+          sleep 30
+
+      - name: Check services health
+        run: |
+          docker compose ps
+
+          # Wait for services to be healthy
+          timeout 120 bash -c 'until docker compose ps | grep -q "healthy\|Up"; do sleep 2; done'
+
+          # Test endpoints
+          curl -f http://localhost/health || exit 1
+          echo "✅ Services are healthy"
+
+      - name: Run integration tests
+        run: |
+          # Test database connection
+          docker compose exec -T mysql mysqladmin ping -h localhost -uroot -ptest_root_pass
+
+          # Test Redis
+          docker compose exec -T redis redis-cli ping
+
+          echo "✅ Integration tests passed"
+
+      - name: Collect logs
+        if: failure()
+        run: |
+          mkdir -p artifacts/logs
+          docker compose logs > artifacts/logs/docker-compose.log
+          docker compose ps > artifacts/logs/containers-status.log
+
+      - name: Upload logs
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: logs-${{ matrix.environment }}
+          path: artifacts/logs/
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker compose down -v
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    environment:
+      name: staging
+      url: https://staging.hero.com
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.STAGING_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.STAGING_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to staging server
+        run: |
+          ssh ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} << 'EOF'
+            cd /var/www/infra-hero
+            git pull origin develop
+            export FRONTEND_REPO=${{ secrets.FRONTEND_REPO }}
+            export BACKEND_REPO=${{ secrets.BACKEND_REPO }}
+            export BRANCH=develop
+            ./deploy.sh
+          EOF
+
+      - name: Verify deployment
+        run: |
+          sleep 30
+          curl -f https://staging.hero.com/health || exit 1
+          echo "✅ Staging deployment successful"
+
+      - name: Notify Slack
+        if: always()
+        uses: slackapi/slack-github-action@v1
+        with:
+          payload: |
+            {
+              "text": "Staging Deployment: ${{ job.status }}",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "Staging deployment *${{ job.status }}*\nCommit: ${{ github.sha }}\nAuthor: ${{ github.actor }}"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment:
+      name: production
+      url: https://hero.com
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create deployment backup
+        run: |
+          ssh ${{ secrets.PROD_USER }}@${{ secrets.PROD_HOST }} << 'EOF'
+            cd /var/www/infra-hero
+            make backup
+          EOF
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.PROD_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.PROD_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to production server
+        run: |
+          ssh ${{ secrets.PROD_USER }}@${{ secrets.PROD_HOST }} << 'EOF'
+            cd /var/www/infra-hero
+            git pull origin main
+            export FRONTEND_REPO=${{ secrets.FRONTEND_REPO }}
+            export BACKEND_REPO=${{ secrets.BACKEND_REPO }}
+            export BRANCH=main
+            ./deploy.sh
+          EOF
+
+      - name: Verify deployment
+        run: |
+          sleep 30
+          curl -f https://hero.com/health || exit 1
+          echo "✅ Production deployment successful"
+
+      - name: Run smoke tests
+        run: |
+          curl -f https://hero.com/ || exit 1
+          curl -f https://hero.com/api/health || exit 1
+          echo "✅ Smoke tests passed"
+
+      - name: Notify team
+        if: always()
+        uses: slackapi/slack-github-action@v1
+        with:
+          payload: |
+            {
+              "text": "🚀 Production Deployment: ${{ job.status }}",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "Production deployment *${{ job.status }}*\nCommit: ${{ github.sha }}\nAuthor: ${{ github.actor }}\nURL: https://hero.com"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Create GitHub Release
+        if: success()
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ github.run_number }}
+          release_name: Release v${{ github.run_number }}
+          body: |
+            ## Changes in this Release
+            - Commit: ${{ github.sha }}
+            - Author: ${{ github.actor }}
+            - Deployed to production at: ${{ github.event.head_commit.timestamp }}
+          draft: false
+          prerelease: false
